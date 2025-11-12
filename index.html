@@ -3,70 +3,145 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Calcul depuis image (Gratuit)</title>
+<title>Calculateur visuel</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; background-color: #f0f0f0; }
-  h1 { color: #333; }
-  input, button { margin-top: 10px; padding: 10px; font-size: 16px; }
-  #result { margin-top: 20px; font-weight: bold; white-space: pre-wrap; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .container {
+    display: flex;
+    width: 90%;
+    max-width: 900px;
+    height: 70%;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  }
+  .left, .right {
+    flex: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  .left {
+    background: rgba(255,255,255,0.1);
+    border-right: 2px solid rgba(255,255,255,0.2);
+  }
+  .right {
+    background: rgba(255,255,255,0.2);
+    overflow-y: auto;
+  }
+  h2 {
+    margin-top: 0;
+  }
+  input[type="file"], textarea, button {
+    margin-top: 15px;
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  textarea {
+    height: 100px;
+    resize: none;
+  }
+  button {
+    background-color: #4f46e5;
+    color: white;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+  button:hover {
+    background-color: #3730a3;
+  }
+  #result {
+    white-space: pre-wrap;
+    font-weight: bold;
+  }
 </style>
 </head>
 <body>
 
-<h1>Calcul depuis une image</h1>
-<input type="file" id="fileInput" accept="image/*">
-<button onclick="analyzeImage()">Analyser et Calculer</button>
-
-<div id="result"></div>
+<div class="container">
+  <div class="left">
+    <h2>Entrer un calcul</h2>
+    <input type="file" id="fileInput" accept="image/*">
+    <textarea id="manualInput" placeholder="Ou écrivez votre calcul ici..."></textarea>
+    <button onclick="analyze()">Calculer</button>
+  </div>
+  <div class="right">
+    <h2>Résultat</h2>
+    <div id="result">Aucun calcul effectué.</div>
+  </div>
+</div>
 
 <script>
+// Nettoie et transforme l'expression pour eval()
 function sanitizeExpression(expr) {
-    // Garde uniquement les chiffres, + - * / et parenthèses
-    return expr.replace(/[^0-9+\-*/().]/g, '');
+    let sanitized = expr.replace(/√\s*(\d+)/g, 'Math.sqrt($1)');
+    sanitized = sanitized.replace(/\^/g, '**');
+    sanitized = sanitized.replace(/[^0-9+\-*/().Mathsqrt]/g, '');
+    return sanitized;
 }
 
-async function analyzeImage() {
-    const fileInput = document.getElementById('fileInput');
-    const file = fileInput.files[0];
-    const resultDiv = document.getElementById('result');
+// Extraire expressions mathématiques
+function extractExpressions(text) {
+    const regex = /[0-9+\-*/().√^]+/g;
+    return text.match(regex) || [];
+}
 
-    if (!file) {
-        alert("Veuillez sélectionner une image !");
+async function analyze() {
+    const fileInput = document.getElementById('fileInput');
+    const manualInput = document.getElementById('manualInput').value.trim();
+    const resultDiv = document.getElementById('result');
+    resultDiv.textContent = "Analyse en cours...";
+
+    let text = manualInput;
+
+    if (fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const { createWorker } = Tesseract;
+        const worker = createWorker({ logger: m => console.log(m) });
+        await worker.load();
+        await worker.loadLanguage('fra');
+        await worker.initialize('fra');
+        const { data: { text: ocrText } } = await worker.recognize(file);
+        await worker.terminate();
+        text += '\n' + ocrText;
+    }
+
+    if (!text) {
+        resultDiv.textContent = "Veuillez entrer un calcul ou importer une image.";
         return;
     }
 
-    resultDiv.textContent = "Analyse en cours... (cela peut prendre quelques secondes)";
+    const expressions = extractExpressions(text);
+    if (expressions.length === 0) {
+        resultDiv.textContent = "Aucune expression mathématique détectée.";
+        return;
+    }
 
-    // Utiliser Tesseract.js pour l'OCR
-    const { createWorker } = Tesseract;
-    const worker = createWorker({
-        logger: m => console.log(m) // Affiche la progression dans la console
-    });
-
-    await worker.load();
-    await worker.loadLanguage('fra');
-    await worker.initialize('fra');
-
-    const { data: { text } } = await worker.recognize(file);
-    await worker.terminate();
-
-    resultDiv.textContent = "Texte détecté :\n" + text;
-
-    // Cherche des expressions mathématiques simples
-    const sanitized = sanitizeExpression(text);
-
-    if (sanitized) {
+    resultDiv.textContent = "";
+    expressions.forEach(expr => {
+        const sanitized = sanitizeExpression(expr);
         try {
             const value = eval(sanitized);
-            resultDiv.textContent += "\n\nExpression calculable : " + sanitized;
-            resultDiv.textContent += "\nRésultat : " + value;
+            resultDiv.textContent += `Expression : ${expr} → Résultat : ${value}\n`;
         } catch {
-            resultDiv.textContent += "\n\nImpossible de calculer automatiquement cette expression.";
+            resultDiv.textContent += `Expression : ${expr} → Impossible à calculer\n`;
         }
-    } else {
-        resultDiv.textContent += "\n\nAucune expression mathématique détectée.";
-    }
+    });
 }
 </script>
 
