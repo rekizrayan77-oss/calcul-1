@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Calculateur visuel</title>
+<title>Calculateur avancé</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
 <style>
   body {
@@ -11,15 +11,15 @@
     font-family: 'Segoe UI', sans-serif;
     background: linear-gradient(135deg, #1e3c72, #2a5298);
     color: white;
-    height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 100vh;
   }
   .container {
     display: flex;
     width: 90%;
-    max-width: 900px;
+    max-width: 1000px;
     height: 70%;
     border-radius: 20px;
     overflow: hidden;
@@ -39,6 +39,7 @@
   .right {
     background: rgba(255,255,255,0.2);
     overflow-y: auto;
+    border-radius: 0 20px 20px 0;
   }
   h2 {
     margin-top: 0;
@@ -65,9 +66,25 @@
   button:hover {
     background-color: #3730a3;
   }
-  #result {
-    white-space: pre-wrap;
-    font-weight: bold;
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+  }
+  th, td {
+    padding: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    text-align: left;
+  }
+  th {
+    background-color: rgba(255,255,255,0.2);
+  }
+  tr.new-result {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  @keyframes fadeIn {
+    0% {opacity: 0; transform: translateY(-10px);}
+    100% {opacity: 1; transform: translateY(0);}
   }
 </style>
 </head>
@@ -81,13 +98,22 @@
     <button onclick="analyze()">Calculer</button>
   </div>
   <div class="right">
-    <h2>Résultat</h2>
-    <div id="result">Aucun calcul effectué.</div>
+    <h2>Résultats</h2>
+    <table id="resultTable">
+      <thead>
+        <tr>
+          <th>Expression</th>
+          <th>Résultat</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="2">Aucun calcul effectué.</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
 <script>
-// Nettoie et transforme l'expression pour eval()
 function sanitizeExpression(expr) {
     let sanitized = expr.replace(/√\s*(\d+)/g, 'Math.sqrt($1)');
     sanitized = sanitized.replace(/\^/g, '**');
@@ -95,7 +121,6 @@ function sanitizeExpression(expr) {
     return sanitized;
 }
 
-// Extraire expressions mathématiques
 function extractExpressions(text) {
     const regex = /[0-9+\-*/().√^]+/g;
     return text.match(regex) || [];
@@ -104,8 +129,7 @@ function extractExpressions(text) {
 async function analyze() {
     const fileInput = document.getElementById('fileInput');
     const manualInput = document.getElementById('manualInput').value.trim();
-    const resultDiv = document.getElementById('result');
-    resultDiv.textContent = "Analyse en cours...";
+    const tableBody = document.getElementById('resultTable').querySelector('tbody');
 
     let text = manualInput;
 
@@ -122,25 +146,31 @@ async function analyze() {
     }
 
     if (!text) {
-        resultDiv.textContent = "Veuillez entrer un calcul ou importer une image.";
+        alert("Veuillez entrer un calcul ou importer une image.");
         return;
     }
 
     const expressions = extractExpressions(text);
+    tableBody.innerHTML = '';
+
     if (expressions.length === 0) {
-        resultDiv.textContent = "Aucune expression mathématique détectée.";
+        tableBody.innerHTML = '<tr><td colspan="2">Aucune expression mathématique détectée.</td></tr>';
         return;
     }
 
-    resultDiv.textContent = "";
     expressions.forEach(expr => {
         const sanitized = sanitizeExpression(expr);
+        let result = '';
         try {
-            const value = eval(sanitized);
-            resultDiv.textContent += `Expression : ${expr} → Résultat : ${value}\n`;
+            result = eval(sanitized);
         } catch {
-            resultDiv.textContent += `Expression : ${expr} → Impossible à calculer\n`;
+            result = 'Impossible à calculer';
         }
+
+        const tr = document.createElement('tr');
+        tr.classList.add('new-result');
+        tr.innerHTML = `<td>${expr}</td><td>${result}</td>`;
+        tableBody.appendChild(tr);
     });
 }
 </script>
